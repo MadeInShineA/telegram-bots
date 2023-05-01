@@ -24,7 +24,7 @@ source_content_dict = {
     'wired': {'div': 'body__inner-container'}
 }
 
-avoided_tags = ['style', 'script', 'head', 'title', 'meta', '[document]']
+avoided_tags = ['style', 'script', 'head', 'title', 'meta', 'figcaption', '[document]']
 
 
 # Define the /news command handler
