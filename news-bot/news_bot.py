@@ -29,9 +29,11 @@ avoided_tags = ['style', 'script', 'head', 'title', 'meta', 'figcaption', '[docu
 
 # Define the /news command handler
 def news():
+
+    sent_messages = load_sent_messages()
     today = datetime.date.today().strftime('%B %d, %Y')
     starting_message = f'📰 *{today}\'s News* 📰'
-    send_message(starting_message,markdown=True)
+    send_message(starting_message, markdown=True)
     # Fetch the latest news headlines from the News API
     # Uses a for loop to bypass the 10 results per request
     data = []
@@ -44,8 +46,10 @@ def news():
             data.append(response)
 
     data = [data_with_link for data_with_link in data if
-            data_with_link.get('link')]
+            data_with_link.get('link') and data_with_link.get('title') not in sent_messages]
 
+    if len(data) == 0:
+        send_message('There are no news today')
     # Summarize the news articles using the TextGear API
     for article in data:
         source = article['source_id']
@@ -53,12 +57,28 @@ def news():
         content = extract_content(url, source)
         summary = summarize_text(content)
         message = f'{article["title"]}\n\n{summary}\n\n{url}'
+        print(message)
 
         send_message(message)
 
+        write_sent_message(sent_messages, article['title'])
+
+
+def load_sent_messages():
+
+    with open('sent_messages.json', 'r') as f:
+        sent_messages = json.load(f)
+        f.close()
+
+    return sent_messages
+
+def write_sent_message(sent_messages,title):
+    sent_messages.append(title)
+    with open('sent_messages.json','w') as f:
+        json.dump(sent_messages, f)
+
 
 # Define the function to extract the content of an article
-
 def extract_content(url, source):
     element_type, element_class = list(source_content_dict[source].items())[0]
 
