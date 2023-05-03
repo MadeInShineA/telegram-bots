@@ -34,6 +34,7 @@ def news():
     today = datetime.date.today().strftime('%B %d, %Y')
     starting_message = f'📰 *{today}\'s News* 📰'
     send_message(starting_message, markdown=True)
+    #pin_last_message()
     # Fetch the latest news headlines from the News API
     # Uses a for loop to bypass the 10 results per request
     data = []
@@ -49,7 +50,8 @@ def news():
             data_with_link.get('link') and data_with_link.get('title') not in sent_messages]
 
     if len(data) == 0:
-        send_message('There are no news today')
+        pass
+        send_message('No news today  (ಠ  ʖ ಠ)')
     # Summarize the news articles using the TextGear API
     for article in data:
         source = article['source_id']
@@ -71,6 +73,23 @@ def load_sent_messages():
         f.close()
 
     return sent_messages
+
+
+def pin_last_message():
+
+    url = f'https://api.telegram.org/bot{bot_token}/getUpdates?offset=-1'
+    last_message_id = requests.get(url).json()['result'][0]['message']['message_id']
+
+    url = f'https://api.telegram.org/bot{bot_token}/pinMessage'
+
+    print(last_message_id)
+    payload = {
+        'chat_id': bot_chatID,
+        'message_id': last_message_id,
+    }
+    response = requests.post(url, payload)
+
+    print(response.text)
 
 def write_sent_message(sent_messages,title):
     sent_messages.append(title)
