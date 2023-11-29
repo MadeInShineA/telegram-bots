@@ -21,14 +21,16 @@ textgear_api_key = os.environ.get('TEXT_GEAR_KEY')
 source_content_dict = {
     'sciencealert': {'div': 'post-content'},
     'phys': {'div': 'article-main'},
-    'wired': {'div': 'body__inner-container'}
+    'wired': {'div': 'body__inner-container'},
+    'techcrunch': {'div': 'article-content'},
 }
 
 avoided_tags = ['style', 'script', 'head', 'title', 'meta', 'figcaption', '[document]', 'a', 'sub']
 avoided_classes_dict = {
     'phys': ['article-main__more', 'd-inline-block', 'd-none'],
     'wired': [],
-    'sciencealert': []
+    'sciencealert': [],
+    'techcrunch': ['embed', 'wp-embedded-content', 'piano-inline-promo', 'tp-container-inner']
 }
 
 
@@ -56,16 +58,16 @@ def news():
 
     if len(data) == 0:
         send_message('No news today  (ಠ  ʖ ಠ)')
-    # Summarize the news articles using the TextGear API
     for article in data:
         source = article['source_id']
         url = article['link']
         content = extract_content(url, source)
         summary = summarize_text(content)
-        message = f'{article["title"]}\n\n{summary}\n\n{url}'
-        print(message)
-        send_message(message)
-        write_sent_message(sent_messages, article['title'])
+        if summary:
+            message = f'{article["title"]}\n\n{summary}\n\n{url}'
+            print(message)
+            send_message(message)
+            write_sent_message(sent_messages, article['title'])
 
 
 def load_sent_messages():
@@ -130,8 +132,9 @@ def extract_content(url, source):
 def summarize_text(text):
     url = f'https://api.textgears.com/summarize?key={textgear_api_key}&text={text}'
     response = requests.post(url)
-    data = json.loads(response.text)
-    return '\n'.join(data['response']['summary'])
+    if response.status_code == 200:
+        data = json.loads(response.text)
+        return '\n'.join(data['response']['summary'])
 
 
 # Define the function to send a message via the Telegram Bot API
