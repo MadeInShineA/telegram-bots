@@ -24,7 +24,12 @@ source_content_dict = {
     'wired': {'div': 'body__inner-container'}
 }
 
-avoided_tags = ['style', 'script', 'head', 'title', 'meta', 'figcaption', '[document]']
+avoided_tags = ['style', 'script', 'head', 'title', 'meta', 'figcaption', '[document]', 'a', 'sub']
+avoided_classes_dict = {
+    'phys': ['article-main__more', 'd-inline-block', 'd-none'],
+    'wired': [],
+    'sciencealert': []
+}
 
 
 # Define the /news command handler
@@ -50,7 +55,6 @@ def news():
             data_with_link.get('link') and data_with_link.get('title') not in sent_messages]
 
     if len(data) == 0:
-        pass
         send_message('No news today  (ಠ  ʖ ಠ)')
     # Summarize the news articles using the TextGear API
     for article in data:
@@ -60,9 +64,7 @@ def news():
         summary = summarize_text(content)
         message = f'{article["title"]}\n\n{summary}\n\n{url}'
         print(message)
-
         send_message(message)
-
         write_sent_message(sent_messages, article['title'])
 
 
@@ -106,8 +108,16 @@ def extract_content(url, source):
     }
     website = requests.get(url, headers=headers)
     soup = BeautifulSoup(website.text, 'html.parser')
+
     # Find the element with corresponding class
     news_content = soup.find(element_type, class_=element_class)
+
+    # Remove unwanted elements based on their class names
+    for class_name in avoided_classes_dict[source]:
+        elements_to_remove = news_content.find_all(class_=class_name)
+        for element in elements_to_remove:
+            element.decompose()
+
     news_text = news_content.findAll(string=True)
 
     news_text = filter(tag_visible, news_text)
@@ -143,7 +153,6 @@ def tag_visible(element):
     if element.parent.name in avoided_tags or isinstance(element, Comment):
         return False
     return True
-
 
 if __name__ == '__main__':
     news()
