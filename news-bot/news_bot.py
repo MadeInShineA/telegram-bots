@@ -10,43 +10,44 @@ import os
 # Define the /news command handler
 
 
-def news(bot_token, bot_chatID, thread_id, news_data_key, textgear_api_key, source_content_dict, avoided_tags, avoided_classes_dict, news_type):
-
+# def send_news(bot_token, bot_chatID, thread_id, news_data_key, textgear_api_key, source_content_dict, avoided_tags, avoided_classes_dict, news_type):
+def send_news_category(bot_token, bot_chatID, thread_id, textgear_api_key, news_category, news_sources, tags_to_avoid):
     sent_messages = load_sent_messages()
     today = datetime.date.today().strftime('%B %d, %Y')
-    starting_message = f'📰 *{today}\'s {news_type.capitalize()} News* 📰'
+    starting_message = f'📰 *{today}\'s {news_category.capitalize()} News* 📰'
     send_message(bot_token, bot_chatID, thread_id, starting_message, markdown=True)
     #pin_last_message()
     # Fetch the latest news headlines from the News API
-    # Uses a for loop to bypass the 10 results per request
     data = []
-    source_content_dict = source_content_dict[news_type]
-    for news_source in source_content_dict.keys():
-        url = f'https://newsdata.io/api/1/news?apikey={news_data_key}&category={news_type}&language=en&domain={news_source}'
+    for news_source in news_sources.keys():
+        url = f'https://newsdata.io/api/1/news?apikey={news_data_key}&category={news_category}&language=en&domain={news_source}'
         responses = requests.get(url)
         responses = json.loads(responses.text)
 
         for response in responses['results']:
             data.append(response)
 
-    data = [data_with_link for data_with_link in data if
-            data_with_link.get('link') and data_with_link.get('title') not in sent_messages]
+        data = [data_with_link for data_with_link in data if
+                data_with_link.get('link') and data_with_link.get('title') not in sent_messages]
 
-    if len(data) == 0:
-        send_message(bot_token, bot_chatID, thread_id, 'No news today  (ಠ  ʖ ಠ)')
-    for article in data:
-        source = article['source_id']
-        url = article['link']
-        content = extract_content(source_content_dict, avoided_classes_dict, avoided_tags, url, source)
-        if not content:
-            continue
-        summary = summarize_text(textgear_api_key, content)
-        if not summary:
-            continue
-        message = f'{article["title"]}\n\n{summary}\n\n{url}'
-        print(message)
-        send_message(bot_token, bot_chatID, thread_id, message)
-        write_sent_message(sent_messages, article['title'])
+        if len(data) == 0:
+            send_message(bot_token, bot_chatID, thread_id, f'No news from {news_sources[news_source]["source_name"]} today  (ಠ  ʖ ಠ)')
+        else:
+            send_message(bot_token, bot_chatID, thread_id, f'News from {news_sources[news_source]["source_name"]} : ')
+            for article in data:
+                url = article['link']
+                news_container = news_sources[news_source]['news_container']
+                classes_to_avoid = news_sources[news_source]['classes_to_avoid']
+                content = extract_content(news_container, classes_to_avoid, tags_to_avoid, url, news_source)
+                if not content:
+                    continue
+                summary = summarize_text(textgear_api_key, content)
+                if not summary:
+                    continue
+                message = f'{article["title"]}\n\n{summary}\n\n{url}'
+                print(message)
+                send_message(bot_token, bot_chatID, thread_id, message)
+                write_sent_message(sent_messages, article['title'])
 
 
 def load_sent_messages():
@@ -63,16 +64,13 @@ def pin_last_message():
     url = f'https://api.telegram.org/bot{bot_token}/getUpdates?offset=-1'
     last_message_id = requests.get(url).json()['result'][0]['message']['message_id']
 
-    url = f'https://api.telegram.org/bot{bot_token}/pinMessage'
+    url = f'https://api.telegram.org/bot{bot_token}/pinChatMessage'
 
-    print(last_message_id)
     payload = {
         'chat_id': bot_chatID,
         'message_id': last_message_id,
     }
-    response = requests.post(url, payload)
-
-    print(response.text)
+    requests.post(url, payload)
 
 def write_sent_message(sent_messages,title):
     sent_messages.append(title)
@@ -81,8 +79,9 @@ def write_sent_message(sent_messages,title):
 
 
 # Define the function to extract the content of an article
-def extract_content(source_content_dict, avoided_classes_dict, avoided_tags, url, source):
-    element_type, element_class = list(source_content_dict[source].items())[0]
+def extract_content(news_container, classes_to_avoid, tags_to_avoid, url, news_source):
+    element_type = next(iter(news_container))  # Get the first (and only) key
+    element_class = news_container[element_type]  # Get the corresponding value
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58. Safari/537.3'
@@ -95,13 +94,13 @@ def extract_content(source_content_dict, avoided_classes_dict, avoided_tags, url
     if not news_content:
         return None
     # Remove unwanted elements based on their class names
-    for class_name in avoided_classes_dict[source]:
+    for class_name in classes_to_avoid:
         elements_to_remove = news_content.find_all(class_=class_name)
         for element in elements_to_remove:
             element.decompose()
 
     news_text = news_content.findAll(string=True)
-    news_text = [text for text in news_text if tag_visible(avoided_tags, text)]
+    news_text = [text for text in news_text if tag_visible(tags_to_avoid, text)]
     content = u' '.join(t.strip() for t in news_text)
 
     return content
@@ -141,6 +140,8 @@ def tag_visible(avoided_tags, element):
 if __name__ == '__main__':
 
     load_dotenv()
+
+    # Set up the Telegram Bot API key and chat ID
     bot_token = os.environ.get('BOT_TOKEN')
     bot_chatID = os.environ.get('BOT_CHAT_ID')
 
@@ -150,41 +151,85 @@ if __name__ == '__main__':
     # Set up the TextGear API
     textgear_api_key = os.environ.get('TEXT_GEAR_KEY')
 
-    source_content_dict = {
+    # TODO Restructure the data to incorporate the news type thread ID and the avoided class per news source
+    # Array of the news categories containing the news sources and their corresponding news content element
+    news_categories_dict = {
         'technology': {
-            'sciencealert': {'div': 'post-content'},
-            'phys': {'div': 'article-main'},
-            'wired': {'div': 'body__inner-container'},
-            'techcrunch': {'div': 'article-content'},
+            'news_sources': {
+                'sciencealert': {
+                    'source_name': 'Science Alert',
+                    'news_container': {'div': 'post-content'},
+                    'classes_to_avoid': []
+                },
+                'phys': {
+                    'source_name': 'Phys.org',
+                    'news_container': {'div': 'article-main'},
+                    'classes_to_avoid': ['article-main__more', 'd-inline-block', 'd-none']
+                },
+                'wired': {
+                    'source_name': 'Wired',
+                    'news_container': {'div': 'body__inner-container'},
+                    'classes_to_avoid': []
+                },
+                'techcrunch': {
+                    'source_name': 'TechCrunch',
+                    'news_container': {'div': 'article-content'},
+                    'classes_to_avoid': ['embed', 'wp-embedded-content', 'piano-inline-promo', 'tp-container-inner']
+                },
+            },
+            'thread_id': os.environ.get('TECHNOLOGY_THREAD_ID')
         },
         'science': {
-            'sciencealert': {'div': 'post-content'},
-            'phys': {'div': 'article-main'},
-            'wired': {'div': 'body__inner-container'},
-            'techcrunch': {'div': 'article-content'},
+            'news_sources': {
+                'sciencealert': {
+                    'source_name': 'Science Alert',
+                    'news_container': {'div': 'post-content'},
+                    'classes_to_avoid': []
+                },
+                'phys': {
+                    'source_name': 'Phys.org',
+                    'news_container': {'div': 'article-main'},
+                    'classes_to_avoid': ['article-main__more', 'd-inline-block', 'd-none']
+                },
+                'wired': {
+                    'source_name': 'Wired',
+                    'news_container': {'div': 'body__inner-container'},
+                    'classes_to_avoid': []
+                },
+                'techcrunch': {
+                    'source_name': 'TechCrunch',
+                    'news_container': {'div': 'article-content'},
+                    'classes_to_avoid': ['embed', 'wp-embedded-content', 'piano-inline-promo', 'tp-container-inner']
+                },
+            },
+            'thread_id': os.environ.get('SCIENCE_THREAD_ID'),
         },
         'sports': {
-            'espn': {'div': 'article-body'},
+            'news_sources': {
+                'espn': {
+                    'source_name': 'ESPN',
+                    'news_container': {'div': 'article-body'},
+                    'classes_to_avoid': ['article-meta', 'content-reactions', 'editorial']
+                },
+            },
+            'thread_id': os.environ.get('SPORTS_THREAD_ID'),
         },
         'business': {
-            'cnbc': {'div': 'ArticleBody-articleBody'},
+            'news_sources': {
+                'cnbc': {
+                    'source_name': 'CNBC',
+                    'news_container': {'div': 'ArticleBody-articleBody'},
+                    'classes_to_avoid': ['RelatedContent-relatedContent', 'RelatedQuotes-relatedQuotes', 'InlineImage-imageEmbed', 'InlineImage-wrapper', 'QuoteInBody-inlineButton']
+                },
+            },
+            'thread_id': os.environ.get('BUSINESS_THREAD_ID'),
         },
     }
 
-    avoided_tags = ['style', 'script', 'head', 'title', 'meta', 'figcaption', '[document]', 'a', 'sub']
+    # Array of the HTML tags to avoid
+    tags_to_avoid = ['style', 'script', 'head', 'title', 'meta', 'figcaption', '[document]', 'sub']
 
-    avoided_classes_dict = {
-        'phys': ['article-main__more', 'd-inline-block', 'd-none'],
-        'wired': [],
-        'sciencealert': [],
-        'techcrunch': ['embed', 'wp-embedded-content', 'piano-inline-promo', 'tp-container-inner'],
-        'espn': ['article-meta', 'content-reactions', 'editorial'],
-        'cnbc': ['RelatedContent-relatedContent']
-    }
-
-    news_type_thread_array = {
-        'sports': os.environ.get('SPORTS_THREAD_ID'),
-    }
-
-    for (news_type, thread_id) in news_type_thread_array.items():
-        news(bot_token, bot_chatID, thread_id, news_data_key, textgear_api_key, source_content_dict, avoided_tags, avoided_classes_dict, news_type)
+    for news_category in news_categories_dict.keys():
+        thread_id = news_categories_dict[news_category]['thread_id']
+        news_sources = news_categories_dict[news_category]['news_sources']
+        send_news_category(bot_token, bot_chatID, thread_id, textgear_api_key, news_category, news_sources, tags_to_avoid)
