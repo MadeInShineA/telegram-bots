@@ -1,0 +1,8 @@
+/news-bot/.env
+/news-bot/sent_messages.json
+/news-bot/venv/
+/.idea/
+/news-bot/__pycache__
+/news-bot/CLAUDE.md
+/news-bot/db.sql
+/news-bot/telegram_bot.log
