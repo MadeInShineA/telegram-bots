@@ -270,7 +270,6 @@ Ready for some news? Just pick what you're interested in:
             [InlineKeyboardButton("📰 Get News", callback_data="show_news_menu")],
             [
                 InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
-                InlineKeyboardButton("📊 Dashboard", callback_data="dashboard_refresh"),
             ],
         ]
 
@@ -295,7 +294,6 @@ Ready for some news? Just pick what you're interested in:
 • `/news [category]` - Get news for specific category
 • `/status` - Show bot health and statistics
 • `/sources` - List all news sources
-• `/dashboard` - View analytics and metrics
 • `/schedule` - Manage automatic news scheduling
 • `/help` - Show this help message
 
@@ -305,12 +303,10 @@ Ready for some news? Just pick what you're interested in:
 ✅ Duplicate detection
 ✅ Category-based organization
 ✅ Interactive buttons and menus
-✅ Analytics dashboard with metrics
 ✅ Automatic scheduling (daily/custom times)
 
 **Tips:**
 💡 Use buttons for easier navigation
-💡 Check `/dashboard` for detailed analytics
 💡 Set up `/schedule add 08:00 technology` for daily news
 💡 Each category has dedicated threads
         """
@@ -427,45 +423,6 @@ Use `/sources` to see configured news sources.
         except Exception as e:
             logger.error(f"Error in sources command: {e}")
             await update.message.reply_text("❌ Error getting sources list")
-
-    async def dashboard_command(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """Handle /dashboard command - show analytics and metrics."""
-        await self.ensure_user_registered(update)
-
-        try:
-            dashboard_text = await self.get_dashboard_data()
-
-            # Create inline keyboard for dashboard actions
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "📊 Detailed Stats", callback_data="dashboard_detailed"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📈 Last 7 Days", callback_data="dashboard_week"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "👥 User Stats", callback_data="dashboard_users"
-                    )
-                ],
-                [InlineKeyboardButton("🔄 Refresh", callback_data="dashboard_refresh")],
-            ]
-
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            await update.message.reply_text(
-                dashboard_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
-            )
-
-        except Exception as e:
-            logger.error(f"Error in dashboard command: {e}")
-            await update.message.reply_text("❌ Error loading dashboard")
 
     async def schedule_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -709,79 +666,10 @@ Use `/sources` to see configured news sources.
                 "❌ Invalid settings command. Use `/settings` for help."
             )
 
-    # Database helper methods for dashboard and scheduling
-    async def get_dashboard_data(self) -> str:
-        """Get dashboard analytics data."""
-        try:
-            with sqlite3.connect("news_bot.db") as conn:
-                cursor = conn.cursor()
-
-                # Get today's stats
-                cursor.execute("""
-                    SELECT COUNT(*) as total_sent,
-                           COUNT(DISTINCT category) as categories_used,
-                           COUNT(DISTINCT source) as sources_used
-                    FROM sent_messages
-                    WHERE DATE(sent_at) = DATE('now')
-                """)
-                today_stats = cursor.fetchone()
-
-                # Get total stats
-                cursor.execute("""
-                    SELECT COUNT(*) as total_messages,
-                           COUNT(DISTINCT category) as total_categories,
-                           MIN(sent_at) as first_message
-                    FROM sent_messages
-                """)
-                total_stats = cursor.fetchone()
-
-                # Get category breakdown for today
-                cursor.execute("""
-                    SELECT category, COUNT(*) as count
-                    FROM sent_messages
-                    WHERE DATE(sent_at) = DATE('now') AND category IS NOT NULL
-                    GROUP BY category
-                    ORDER BY count DESC
-                """)
-                category_stats = cursor.fetchall()
-
-                # Get scheduled jobs count
-                cursor.execute(
-                    "SELECT COUNT(*) FROM scheduled_jobs WHERE is_active = 1"
-                )
-                active_jobs = cursor.fetchone()[0]
-
-                dashboard_text = f"""📊 **News Bot Dashboard**
-
-🗓️ **Today's Activity:**
-• 📨 Messages sent: {today_stats[0]}
-• 📂 Categories used: {today_stats[1]}
-• 🌐 Sources active: {today_stats[2]}
-
-📈 **Overall Statistics:**
-• 📊 Total messages: {total_stats[0]}
-• ⏰ Active schedules: {active_jobs}
-• 🚀 Bot running since: {total_stats[2][:10] if total_stats[2] else "Unknown"}
-
-📂 **Today's Category Breakdown:**"""
-
-                if category_stats:
-                    for category, count in category_stats:
-                        emoji = NEWS_CATEGORIES.get(category, {}).get("emoji", "📰")
-                        dashboard_text += f"\n{emoji} {category}: {count} articles"
-                else:
-                    dashboard_text += "\nNo articles sent today yet."
-
-                return dashboard_text
-
-        except Exception as e:
-            logger.error(f"Error getting dashboard data: {e}")
-            return "❌ Error loading dashboard data"
-
     def get_scheduled_jobs(self) -> List[Dict]:
         """Get all scheduled jobs from database."""
         try:
-            with sqlite3.connect("news_bot.db") as conn:
+            with sqlite3.connect("db.sql") as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT job_name, category, schedule_time, is_active, last_run
@@ -812,7 +700,7 @@ Use `/sources` to see configured news sources.
             job_name = f"{category}_news_{time_str.replace(':', '')}"
 
             # Add to database
-            with sqlite3.connect("news_bot.db") as conn:
+            with sqlite3.connect("db.sql") as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
@@ -834,7 +722,7 @@ Use `/sources` to see configured news sources.
         """Remove a scheduled job."""
         try:
             # Remove from database
-            with sqlite3.connect("news_bot.db") as conn:
+            with sqlite3.connect("db.sql") as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "DELETE FROM scheduled_jobs WHERE job_name = ?", (job_name,)
@@ -852,7 +740,7 @@ Use `/sources` to see configured news sources.
     def toggle_scheduled_job(self, job_name: str) -> bool:
         """Toggle a scheduled job active/inactive."""
         try:
-            with sqlite3.connect("news_bot.db") as conn:
+            with sqlite3.connect("db.sql") as conn:
                 cursor = conn.cursor()
 
                 # Get current status
@@ -1180,149 +1068,6 @@ Use `/sources` to see configured news sources.
                 sources_text += f"{emoji} {category.title()}: {count} sources\n"
 
             await query.edit_message_text(sources_text, parse_mode=ParseMode.MARKDOWN)
-
-        elif callback_data.startswith("dashboard_"):
-            dashboard_action = callback_data.replace("dashboard_", "")
-
-            if dashboard_action == "refresh":
-                # Refresh dashboard data
-                dashboard_text = await self.get_dashboard_data()
-
-                # Add dashboard navigation buttons
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "📊 Detailed Stats", callback_data="dashboard_detailed"
-                        ),
-                        InlineKeyboardButton(
-                            "📈 Last 7 Days", callback_data="dashboard_week"
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "👥 User Stats", callback_data="dashboard_users"
-                        ),
-                        InlineKeyboardButton(
-                            "🔄 Refresh", callback_data="dashboard_refresh"
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "🔙 Back to Main", callback_data="main_menu"
-                        )
-                    ],
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await query.edit_message_text(
-                    dashboard_text,
-                    parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=reply_markup,
-                )
-
-            elif dashboard_action == "detailed":
-                # Show detailed analytics
-                try:
-                    with sqlite3.connect("news_bot.db") as conn:
-                        cursor = conn.cursor()
-
-                        # Get weekly stats
-                        cursor.execute("""
-                            SELECT DATE(sent_at) as date, COUNT(*) as count
-                            FROM sent_messages
-                            WHERE sent_at >= datetime('now', '-7 days')
-                            GROUP BY DATE(sent_at)
-                            ORDER BY date DESC
-                        """)
-                        weekly_stats = cursor.fetchall()
-
-                        # Get source breakdown
-                        cursor.execute("""
-                            SELECT source, COUNT(*) as count
-                            FROM sent_messages
-                            WHERE sent_at >= datetime('now', '-7 days') AND source IS NOT NULL
-                            GROUP BY source
-                            ORDER BY count DESC
-                            LIMIT 5
-                        """)
-                        source_stats = cursor.fetchall()
-
-                    detailed_text = "📊 **Detailed Analytics (Last 7 Days)**\n\n"
-
-                    detailed_text += "📈 **Daily Activity:**\n"
-                    for date, count in weekly_stats:
-                        detailed_text += f"• {date}: {count} articles\n"
-
-                    detailed_text += "\n🌐 **Top Sources:**\n"
-                    for source, count in source_stats:
-                        detailed_text += f"• {source}: {count} articles\n"
-
-                    await query.edit_message_text(
-                        detailed_text, parse_mode=ParseMode.MARKDOWN
-                    )
-
-                except Exception as e:
-                    await query.edit_message_text("❌ Error loading detailed stats")
-
-            elif dashboard_action == "week":
-                # Show last 7 days summary
-                try:
-                    with sqlite3.connect("news_bot.db") as conn:
-                        cursor = conn.cursor()
-
-                        cursor.execute("""
-                            SELECT category, COUNT(*) as count
-                            FROM sent_messages
-                            WHERE sent_at >= datetime('now', '-7 days') AND category IS NOT NULL
-                            GROUP BY category
-                            ORDER BY count DESC
-                        """)
-                        week_stats = cursor.fetchall()
-
-                    week_text = "📅 **Last 7 Days Summary**\n\n"
-                    total_week = sum(count for _, count in week_stats)
-                    week_text += f"📊 **Total Articles:** {total_week}\n\n"
-
-                    week_text += "📂 **By Category:**\n"
-                    for category, count in week_stats:
-                        emoji = NEWS_CATEGORIES.get(category, {}).get("emoji", "📰")
-                        percentage = (count / total_week * 100) if total_week > 0 else 0
-                        week_text += (
-                            f"{emoji} {category}: {count} ({percentage:.1f}%)\n"
-                        )
-
-                    await query.edit_message_text(
-                        week_text, parse_mode=ParseMode.MARKDOWN
-                    )
-
-                except Exception as e:
-                    await query.edit_message_text("❌ Error loading weekly stats")
-
-            elif dashboard_action == "users":
-                # Show user statistics
-                try:
-                    user_stats = get_user_stats()
-
-                    users_text = f"""👥 **User Statistics**
-
-    📊 **Total Users:** {user_stats["total_users"]}
-    🆕 **New Today:** {user_stats["new_today"]}
-    🔥 **Active (7 days):** {user_stats["active_users"]}
-
-    📈 **Growth Rate:**
-    {f"• {((user_stats['new_today'] / max(user_stats['total_users'], 1)) * 100):.1f}% daily growth" if user_stats["total_users"] > 0 else "• No data available"}
-
-    💪 **Engagement:**
-    {f"• {((user_stats['active_users'] / max(user_stats['total_users'], 1)) * 100):.1f}% active users" if user_stats["total_users"] > 0 else "• No data available"}
-
-    *Statistics updated in real-time*
-                    """
-
-                    await query.edit_message_text(
-                        users_text, parse_mode=ParseMode.MARKDOWN
-                    )
-
-                except Exception as e:
-                    await query.edit_message_text("❌ Error loading user stats")
 
         elif callback_data == "settings":
             # Show main settings menu
@@ -1838,7 +1583,6 @@ Use `/sources` to see configured news sources.
             [InlineKeyboardButton("📰 Get News", callback_data="show_news_menu")],
             [
                 InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
-                InlineKeyboardButton("📊 Dashboard", callback_data="dashboard_refresh"),
             ],
         ]
 
@@ -1881,7 +1625,6 @@ Use `/sources` to see configured news sources.
             application.add_handler(CommandHandler("news", self.news_command))
             application.add_handler(CommandHandler("status", self.status_command))
             application.add_handler(CommandHandler("sources", self.sources_command))
-            application.add_handler(CommandHandler("dashboard", self.dashboard_command))
             application.add_handler(CommandHandler("schedule", self.schedule_command))
             application.add_handler(CommandHandler("settings", self.settings_command))
             application.add_handler(

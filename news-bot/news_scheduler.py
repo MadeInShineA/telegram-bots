@@ -57,7 +57,7 @@ class NewsScheduler:
     async def load_user_schedules(self):
         """Load all user preferred times and schedule them."""
         try:
-            with sqlite3.connect("news_bot.db") as conn:
+            with sqlite3.connect("db.sql") as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT user_id, preferred_time, timezone, subscribed_categories
