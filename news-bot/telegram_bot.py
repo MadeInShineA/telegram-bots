@@ -259,17 +259,24 @@ class NewsTelegramBot:
         user = update.effective_user
         user_prefs = get_user_preferences(user.id)
 
-        welcome_text = f"""
-👋 **Hi {user.first_name}!**
+        welcome_text = f"""👋 **Hi {user.first_name}!**
+`───────────────────────────`
 
-Ready for some news? Just pick what you're interested in:
-        """
+📰 **Ready for some news?**
+Just pick what you're interested in below:"""
 
-        # Create simple action-focused keyboard
+        # Create comprehensive menu with all available options
         keyboard = [
             [InlineKeyboardButton("📰 Get News", callback_data="show_news_menu")],
             [
                 InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
+                InlineKeyboardButton(
+                    "📅 Daily Schedule", callback_data="settings_notifications"
+                ),
+            ],
+            [
+                InlineKeyboardButton("📊 Status", callback_data="status"),
+                InlineKeyboardButton("📰 News Sources", callback_data="sources"),
             ],
         ]
 
@@ -284,34 +291,7 @@ Ready for some news? Just pick what you're interested in:
     ) -> None:
         """Handle /help command."""
         await self.ensure_user_registered(update)
-
-        help_text = """
-🤖 **News Bot Help**
-
-**Commands:**
-• `/start` - Show welcome message and main menu
-• `/news` - Show news category selection
-• `/news [category]` - Get news for specific category
-• `/status` - Show bot health and statistics
-• `/sources` - List all news sources
-• `/schedule` - Manage automatic news scheduling
-• `/help` - Show this help message
-
-**Features:**
-✅ Real-time news from multiple sources
-✅ AI-powered article summaries
-✅ Duplicate detection
-✅ Category-based organization
-✅ Interactive buttons and menus
-✅ Automatic scheduling (daily/custom times)
-
-**Tips:**
-💡 Use buttons for easier navigation
-💡 Set up `/schedule add 08:00 technology` for daily news
-💡 Each category has dedicated threads
-        """
-
-        await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
+        await self.show_main_menu_message(update)
 
     async def news_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -330,11 +310,46 @@ Ready for some news? Just pick what you're interested in:
             return
 
         # No args → send the same as "📰 Get News" button
-        await self.show_news_menu(update)
+        await self.show_news_menu_message(update)
 
-    async def show_news_menu(self, update: Update) -> None:
-        """Show news category selection menu."""
-        text = "📰 **Select a news category:**"
+    async def show_main_menu_message(self, update: Update) -> None:
+        """Show main menu as a message response to slash commands."""
+        user = update.effective_user
+        user_prefs = get_user_preferences(user.id)
+
+        welcome_text = f"""👋 **Hi {user.first_name}!**
+`───────────────────────────`
+
+📰 **Ready for some news?**
+Just pick what you're interested in below:"""
+
+        # Create comprehensive menu with all available options
+        keyboard = [
+            [InlineKeyboardButton("📰 Get News", callback_data="show_news_menu")],
+            [
+                InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
+                InlineKeyboardButton(
+                    "📅 Daily Schedule", callback_data="settings_notifications"
+                ),
+            ],
+            [
+                InlineKeyboardButton("📊 Status", callback_data="status"),
+                InlineKeyboardButton("📰 News Sources", callback_data="sources"),
+            ],
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_text(
+            welcome_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
+        )
+
+    async def show_news_menu_message(self, update: Update) -> None:
+        """Show news category selection menu as a message response."""
+        text = """📰 **News Categories**
+`───────────────────────────`
+
+👆 **Select a category below:**"""
 
         keyboard = []
         for category, data in NEWS_CATEGORIES.items():
@@ -350,6 +365,9 @@ Ready for some news? Just pick what you're interested in:
         keyboard.append(
             [InlineKeyboardButton("🔄 All Categories", callback_data="news_all")]
         )
+        keyboard.append(
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")]
+        )
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -357,72 +375,75 @@ Ready for some news? Just pick what you're interested in:
             text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
         )
 
+    async def show_news_menu(self, query) -> None:
+        """Show news category selection menu for callback queries."""
+        text = """📰 **News Categories**
+`───────────────────────────`
+
+👆 **What would you like to read?**"""
+
+        keyboard = []
+        for category, data in NEWS_CATEGORIES.items():
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"{data['emoji']} {category.title()}",
+                        callback_data=f"news_{category}",
+                    )
+                ]
+            )
+
+        keyboard.append(
+            [InlineKeyboardButton("🔄 All Categories", callback_data="news_all")]
+        )
+        keyboard.append(
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")]
+        )
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
+        )
+
     async def status_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
         """Handle /status command."""
-        try:
-            await self.ensure_user_registered(update)
+        await self.ensure_user_registered(update)
 
-            # Get user's timezone preference
-            user_prefs = get_user_preferences(update.effective_user.id)
-            user_timezone = user_prefs.get("timezone", "UTC")
+        # Create a mock query object to use existing status menu function
+        class MockQuery:
+            def __init__(self, user_id):
+                self.from_user = type("User", (), {"id": user_id})()
 
-            # Get current time in user's timezone
-            try:
-                user_tz = pytz.timezone(user_timezone)
-                current_time = datetime.now(user_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
-            except:
-                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+            async def edit_message_text(self, text, parse_mode=None, reply_markup=None):
+                # Use update.message.reply_text instead of edit
+                await update.message.reply_text(
+                    text, parse_mode=parse_mode, reply_markup=reply_markup
+                )
 
-            sent_messages = get_sent_messages_list()
-
-            status_text = f"""
-📊 **Bot Status Report**
-
-🕒 **Current Time:** {current_time}
-📨 **Messages Sent Today:** {len([msg for msg in sent_messages if msg])}
-💾 **Database:** ✅ Connected
-🔗 **APIs:** ✅ Configured
-
-**News Categories:**
-{chr(10).join([f"{data['emoji']} {cat.title()}: Available" for cat, data in NEWS_CATEGORIES.items()])}
-
-**Recent Activity:**
-Last {min(5, len(sent_messages))} sent articles tracked in database.
-
-Use `/sources` to see configured news sources.
-            """
-
-            await update.message.reply_text(status_text, parse_mode=ParseMode.MARKDOWN)
-
-        except Exception as e:
-            logger.error(f"Error in status command: {e}")
-            await update.message.reply_text("❌ Error getting bot status")
+        mock_query = MockQuery(update.effective_user.id)
+        await self.show_status_menu(mock_query)
 
     async def sources_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
         """Handle /sources command."""
-        try:
-            sources_text = "📰 **News Sources by Category:**\n\n"
+        await self.ensure_user_registered(update)
 
-            for category, config in self.news_categories_dict.items():
-                emoji = NEWS_CATEGORIES[category]["emoji"]
-                sources_text += f"{emoji} **{category.title()}:**\n"
+        # Create a mock query object to use existing sources menu function
+        class MockQuery:
+            def __init__(self, user_id):
+                self.from_user = type("User", (), {"id": user_id})()
 
-                for source_key, source_info in config["news_sources"].items():
-                    sources_text += f"  • {source_info['source_name']}\n"
+            async def edit_message_text(self, text, parse_mode=None, reply_markup=None):
+                # Use update.message.reply_text instead of edit
+                await update.message.reply_text(
+                    text, parse_mode=parse_mode, reply_markup=reply_markup
+                )
 
-                sources_text += "\n"
-
-            sources_text += "💡 **Note:** All sources are fetched via NewsData.io API"
-
-            await update.message.reply_text(sources_text, parse_mode=ParseMode.MARKDOWN)
-
-        except Exception as e:
-            logger.error(f"Error in sources command: {e}")
-            await update.message.reply_text("❌ Error getting sources list")
+        mock_query = MockQuery(update.effective_user.id)
+        await self.show_sources_menu(mock_query)
 
     async def schedule_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -430,109 +451,19 @@ Use `/sources` to see configured news sources.
         """Handle /schedule command for setting up automatic news delivery."""
         await self.ensure_user_registered(update)
 
-        if not context.args:
-            # Show current schedules and help
-            current_jobs = self.get_scheduled_jobs()
+        # Create a mock query object to use existing schedule menu function
+        class MockQuery:
+            def __init__(self, user_id):
+                self.from_user = type("User", (), {"id": user_id})()
 
-            schedule_text = "⏰ **News Scheduling**\n\n"
-
-            if current_jobs:
-                schedule_text += "**Active Schedules:**\n"
-                for job in current_jobs:
-                    status = "✅" if job["is_active"] else "❌"
-                    schedule_text += (
-                        f"{status} {job['job_name']} - {job['schedule_time']}\n"
-                    )
-                schedule_text += "\n"
-
-            schedule_text += """**Usage:**
-• `/schedule add 08:00 technology` - Add daily tech news at 8 AM
-• `/schedule add 18:00 all` - Add all categories at 6 PM
-• `/schedule list` - Show all scheduled jobs
-• `/schedule remove [job_name]` - Remove a scheduled job
-• `/schedule toggle [job_name]` - Enable/disable a job
-
-**Time format:** HH:MM (24-hour format)
-**Categories:** technology, science, sports, business, all
-            """
-
-            await update.message.reply_text(
-                schedule_text, parse_mode=ParseMode.MARKDOWN
-            )
-            return
-
-        action = context.args[0].lower()
-
-        if action == "add" and len(context.args) >= 3:
-            time_str = context.args[1]
-            category = context.args[2].lower()
-
-            # Validate time format
-            try:
-                hour, minute = map(int, time_str.split(":"))
-                if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                    raise ValueError("Invalid time")
-            except:
+            async def edit_message_text(self, text, parse_mode=None, reply_markup=None):
+                # Use update.message.reply_text instead of edit
                 await update.message.reply_text(
-                    "❌ Invalid time format. Use HH:MM (24-hour)"
+                    text, parse_mode=parse_mode, reply_markup=reply_markup
                 )
-                return
 
-            # Validate category
-            valid_categories = list(NEWS_CATEGORIES.keys()) + ["all"]
-            if category not in valid_categories:
-                await update.message.reply_text(
-                    f"❌ Invalid category. Use: {', '.join(valid_categories)}"
-                )
-                return
-
-            # Add the scheduled job
-            success = await self.add_scheduled_job(time_str, category)
-            if success:
-                await update.message.reply_text(
-                    f"✅ Scheduled {category} news for {time_str} daily"
-                )
-            else:
-                await update.message.reply_text("❌ Failed to add schedule")
-
-        elif action == "list":
-            jobs = self.get_scheduled_jobs()
-            if not jobs:
-                await update.message.reply_text("📅 No scheduled jobs found")
-                return
-
-            jobs_text = "📅 **Scheduled Jobs:**\n\n"
-            for job in jobs:
-                status = "✅ Active" if job["is_active"] else "❌ Inactive"
-                jobs_text += f"**{job['job_name']}**\n"
-                jobs_text += f"⏰ Time: {job['schedule_time']}\n"
-                jobs_text += f"📂 Category: {job['category']}\n"
-                jobs_text += f"🔄 Status: {status}\n"
-                if job["last_run"]:
-                    jobs_text += f"🕐 Last run: {job['last_run']}\n"
-                jobs_text += "\n"
-
-            await update.message.reply_text(jobs_text, parse_mode=ParseMode.MARKDOWN)
-
-        elif action == "remove" and len(context.args) >= 2:
-            job_name = " ".join(context.args[1:])
-            success = self.remove_scheduled_job(job_name)
-            if success:
-                await update.message.reply_text(f"✅ Removed scheduled job: {job_name}")
-            else:
-                await update.message.reply_text(f"❌ Job not found: {job_name}")
-
-        elif action == "toggle" and len(context.args) >= 2:
-            job_name = " ".join(context.args[1:])
-            success = self.toggle_scheduled_job(job_name)
-            if success:
-                await update.message.reply_text(f"✅ Toggled job: {job_name}")
-            else:
-                await update.message.reply_text(f"❌ Job not found: {job_name}")
-        else:
-            await update.message.reply_text(
-                "❌ Invalid schedule command. Use `/schedule` for help."
-            )
+        mock_query = MockQuery(update.effective_user.id)
+        await self.show_schedule_toggle_menu(mock_query)
 
     async def settings_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -540,131 +471,19 @@ Use `/sources` to see configured news sources.
         """Handle /settings command for user preferences."""
         await self.ensure_user_registered(update)
 
-        user_id = update.effective_user.id
-        user_prefs = get_user_preferences(user_id)
+        # Create a mock query object to use existing settings menu function
+        class MockQuery:
+            def __init__(self, user_id):
+                self.from_user = type("User", (), {"id": user_id})()
 
-        settings_text = f"""⚙️ **Your Settings**
-
-📂 **Subscribed Categories:**
-{", ".join([cat.title() for cat in user_prefs.get("subscribed_categories", [])]) or "None"}
-
-⏰ **Preferred Time:**
-{user_prefs.get("preferred_time") or "Not set"}
-
-📊 **Daily Limit:**
-{user_prefs.get("daily_limit", 5)} articles per category
-
-🔔 **Notifications:**
-{"✅ Enabled" if user_prefs.get("notifications", True) else "❌ Disabled"}
-
-🌐 **Language:**
-{user_prefs.get("language", "en").upper()}
-
-**Commands to customize:**
-• `/settings categories` - Manage subscriptions
-• `/settings time HH:MM` - Set preferred time
-• `/settings limit N` - Set daily article limit
-• `/settings notifications on/off` - Toggle notifications
-        """
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "📂 Categories", callback_data="settings_categories"
-                )
-            ],
-            [InlineKeyboardButton("⏰ Schedule Time", callback_data="settings_time")],
-            [InlineKeyboardButton("📊 Daily Limit", callback_data="settings_limit")],
-            [
-                InlineKeyboardButton(
-                    "🔔 Notifications", callback_data="settings_notifications"
-                )
-            ],
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        if not context.args:
-            await update.message.reply_text(
-                settings_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
-            )
-            return
-
-        # Handle settings commands
-        setting = context.args[0].lower()
-
-        if setting == "categories" and len(context.args) >= 2:
-            # Update subscribed categories
-            action = context.args[1].lower()
-            if action == "all":
-                categories = list(NEWS_CATEGORIES.keys())
-                update_user_preferences(user_id, subscribed_categories=categories)
-                await update.message.reply_text("✅ Subscribed to all categories!")
-            elif action == "none":
-                update_user_preferences(user_id, subscribed_categories=[])
-                await update.message.reply_text("✅ Unsubscribed from all categories!")
-            elif action in NEWS_CATEGORIES:
-                current_cats = user_prefs.get("subscribed_categories", [])
-                if action in current_cats:
-                    current_cats.remove(action)
-                    await update.message.reply_text(f"✅ Unsubscribed from {action}!")
-                else:
-                    current_cats.append(action)
-                    await update.message.reply_text(f"✅ Subscribed to {action}!")
-                update_user_preferences(user_id, subscribed_categories=current_cats)
-            else:
+            async def edit_message_text(self, text, parse_mode=None, reply_markup=None):
+                # Use update.message.reply_text instead of edit
                 await update.message.reply_text(
-                    "❌ Invalid category. Use: technology, science, sports, business, all, none"
+                    text, parse_mode=parse_mode, reply_markup=reply_markup
                 )
 
-        elif setting == "time" and len(context.args) >= 2:
-            time_str = context.args[1]
-            try:
-                hour, minute = map(int, time_str.split(":"))
-                if 0 <= hour <= 23 and 0 <= minute <= 59:
-                    update_user_preferences(user_id, preferred_time=time_str)
-                    await update.message.reply_text(
-                        f"✅ Preferred time set to {time_str}!"
-                    )
-                else:
-                    raise ValueError("Invalid time")
-            except:
-                await update.message.reply_text(
-                    "❌ Invalid time format. Use HH:MM (24-hour)"
-                )
-
-        elif setting == "limit" and len(context.args) >= 2:
-            try:
-                limit = int(context.args[1])
-                if 1 <= limit <= 20:
-                    update_user_preferences(user_id, daily_limit=limit)
-                    await update.message.reply_text(
-                        f"✅ Daily limit set to {limit} articles!"
-                    )
-                else:
-                    raise ValueError("Invalid limit")
-            except:
-                await update.message.reply_text(
-                    "❌ Invalid limit. Use a number between 1-20"
-                )
-
-        elif setting == "notifications" and len(context.args) >= 2:
-            toggle = context.args[1].lower()
-            if toggle in ["on", "true", "yes", "1"]:
-                update_user_preferences(user_id, notifications=True)
-                await update.message.reply_text("✅ Notifications enabled!")
-            elif toggle in ["off", "false", "no", "0"]:
-                update_user_preferences(user_id, notifications=False)
-                await update.message.reply_text("✅ Notifications disabled!")
-            else:
-                await update.message.reply_text(
-                    "❌ Use 'on' or 'off' for notifications"
-                )
-
-        else:
-            await update.message.reply_text(
-                "❌ Invalid settings command. Use `/settings` for help."
-            )
+        mock_query = MockQuery(update.effective_user.id)
+        await self.show_settings_menu(mock_query)
 
     def get_scheduled_jobs(self) -> List[Dict]:
         """Get all scheduled jobs from database."""
@@ -814,9 +633,8 @@ Use `/sources` to see configured news sources.
                 record_sent_message,
             )
 
-            # Get user preferences to check their limit
+            # Get user preferences
             user_prefs = get_user_preferences(user_id)
-            daily_limit = user_prefs.get("daily_limit", 5)
 
             # Fetch news from API
             articles = []
@@ -845,6 +663,19 @@ Use `/sources` to see configured news sources.
             ]
 
             if not new_articles:
+                # Send "no new articles" message instead of header
+                category_emoji = NEWS_CATEGORIES[category]['emoji']
+                total_found = len(articles)
+                no_news_msg = (
+                    f"{category_emoji} **{category.title()} News** {category_emoji}\n"
+                    f"`───────────────────────────`\n\n"
+                    f"✅ **All caught up!**\n"
+                    f"No new {category} articles since your last check\n\n"
+                    f"🔄 *Check back later for fresh updates!*"
+                )
+                await self.application.bot.send_message(
+                    chat_id=user_id, text=no_news_msg, parse_mode=ParseMode.MARKDOWN
+                )
                 return 0
 
             # Get user's timezone for header
@@ -856,17 +687,20 @@ Use `/sources` to see configured news sources.
                 today = datetime.now().strftime("%B %d, %Y")
 
             # Send category header
+            category_emoji = NEWS_CATEGORIES[category]['emoji']
             header_msg = (
-                f"📰 **{today}'s {category.title()} News**\n━━━━━━━━━━━━━━━━━━━━━━"
+                f"{category_emoji} **{today}'s {category.title()} News** {category_emoji}\n"
+                f"`───────────────────────────`\n\n"
+                f"🎆 **{len(new_articles)}** fresh articles ready for you!\n"
             )
             await self.application.bot.send_message(
                 chat_id=user_id, text=header_msg, parse_mode=ParseMode.MARKDOWN
             )
 
             articles_sent = 0
-            max_articles = min(daily_limit, len(new_articles))  # Respect user's limit
+            max_articles = len(new_articles)  # No limit restriction
 
-            # Send multiple articles up to the user's limit
+            # Send multiple articles
             for article, source_key in new_articles[:max_articles]:
                 try:
                     # Extract content
@@ -892,10 +726,11 @@ Use `/sources` to see configured news sources.
 
                     # Create individual article message
                     source_name = source_config["source_name"]
-                    message = f"**{article['title']}**\n\n"
+                    message = f"**{article['title']}**\n"
+                    message += f"`───────────────────────────`\n\n"
                     message += f"📝 {summary}\n\n"
                     message += f"🔗 [Read full article]({article['link']})\n"
-                    message += f"📰 *Source: {source_name}*"
+                    message += f"📰 *{source_name}*"
 
                     # Send the article
                     await self.application.bot.send_message(
@@ -922,7 +757,24 @@ Use `/sources` to see configured news sources.
 
             # Send footer with count
             if articles_sent > 0:
-                footer_msg = f"━━━━━━━━━━━━━━━━━━━━━━\n📊 Sent {articles_sent} of {len(new_articles)} available articles\n💡 *Change your limit in /settings*"
+                total_found = len(articles)
+                total_new = len(new_articles)
+
+                if articles_sent == total_new:
+                    footer_msg = (
+                        f"\n`───────────────────────────`\n"
+                        f"✅ **Delivery Complete!**\n"
+                        f"Successfully sent **{articles_sent}** {category} articles\n\n"
+                        f"🚀 *Stay informed, stay ahead!*"
+                    )
+                else:
+                    footer_msg = (
+                        f"\n`───────────────────────────`\n"
+                        f"⚠️ **Partial Delivery**\n"
+                        f"Sent **{articles_sent}** articles (some couldn't be processed)\n\n"
+                        f"🚀 *Stay informed, stay ahead!*"
+                    )
+
                 await self.application.bot.send_message(
                     chat_id=user_id, text=footer_msg, parse_mode=ParseMode.MARKDOWN
                 )
@@ -944,31 +796,7 @@ Use `/sources` to see configured news sources.
         callback_data = query.data
 
         if callback_data == "show_news_menu":
-            # Show the news category selection menu
-            text = "📰 **What kind of news would you like?**"
-
-            keyboard = []
-            for category, data in NEWS_CATEGORIES.items():
-                keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            f"{data['emoji']} {category.title()}",
-                            callback_data=f"news_{category}",
-                        )
-                    ]
-                )
-
-            keyboard.append(
-                [InlineKeyboardButton("🔄 All Categories", callback_data="news_all")]
-            )
-            keyboard.append(
-                [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")]
-            )
-
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(
-                text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
-            )
+            await self.show_news_menu(query)
 
         elif callback_data.startswith("news_"):
             category = callback_data.replace("news_", "")
@@ -1030,90 +858,13 @@ Use `/sources` to see configured news sources.
                     await query.edit_message_text(f"❌ Error fetching {category} news")
 
         elif callback_data == "status":
-            # Show status with user's timezone
-            try:
-                user_prefs = get_user_preferences(query.from_user.id)
-                user_timezone = user_prefs.get("timezone", "UTC")
-
-                # Get current time in user's timezone
-                try:
-                    user_tz = pytz.timezone(user_timezone)
-                    current_time = datetime.now(user_tz).strftime("%H:%M:%S %Z")
-                except:
-                    current_time = datetime.now().strftime("%H:%M:%S UTC")
-
-                sent_count = len(get_sent_messages_list())
-
-                status_text = f"""
-    📊 **Quick Status**
-    🕒 Time: {current_time}
-    📨 Messages: {sent_count} tracked
-    💾 Database: ✅ Active
-    🤖 Bot: ✅ Running
-                """
-
-                await query.edit_message_text(
-                    status_text, parse_mode=ParseMode.MARKDOWN
-                )
-
-            except Exception as e:
-                await query.edit_message_text("❌ Error getting status")
+            await self.show_status_menu(query)
 
         elif callback_data == "sources":
-            # Show sources summary
-            sources_text = "📰 **News Sources:**\n\n"
-            for category, config in self.news_categories_dict.items():
-                emoji = NEWS_CATEGORIES[category]["emoji"]
-                count = len(config["news_sources"])
-                sources_text += f"{emoji} {category.title()}: {count} sources\n"
-
-            await query.edit_message_text(sources_text, parse_mode=ParseMode.MARKDOWN)
+            await self.show_sources_menu(query)
 
         elif callback_data == "settings":
-            # Show main settings menu
-            user_prefs = get_user_preferences(query.from_user.id)
-
-            settings_text = f"""⚙️ **Your Settings**
-
-    📂 **Subscribed Categories:**
-    {", ".join([cat.title() for cat in user_prefs.get("subscribed_categories", [])]) or "None"}
-
-    ⏰ **Preferred Time:**
-    {user_prefs.get("preferred_time") or "Not set"}
-
-    📊 **Daily Limit:**
-    {user_prefs.get("daily_limit", 5)} articles per category
-
-    🔔 **Notifications:**
-    {"✅ Enabled" if user_prefs.get("notifications", True) else "❌ Disabled"}
-
-    👆 **Choose what to configure:**
-            """
-
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "📂 Manage Categories", callback_data="settings_categories"
-                    )
-                ],
-                [InlineKeyboardButton("⏰ Set Time", callback_data="settings_time")],
-                [
-                    InlineKeyboardButton(
-                        "📊 Daily Limit", callback_data="settings_limit"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🔔 Notifications", callback_data="settings_notifications"
-                    )
-                ],
-                [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")],
-            ]
-
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(
-                settings_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
-            )
+            await self.show_settings_menu(query)
 
         # Handle individual settings sub-menus
         elif callback_data == "settings_categories":
@@ -1122,11 +873,8 @@ Use `/sources` to see configured news sources.
         elif callback_data == "settings_time":
             await self.show_time_menu(query)
 
-        elif callback_data == "settings_limit":
-            await self.show_limit_menu(query)
-
         elif callback_data == "settings_notifications":
-            await self.show_notifications_menu(query)
+            await self.show_schedule_toggle_menu(query)
 
         # Handle category toggle actions
         elif callback_data.startswith("toggle_cat_"):
@@ -1202,16 +950,6 @@ Use `/sources` to see configured news sources.
             await self.show_time_menu(query)
 
         # Handle limit setting actions
-        elif callback_data.startswith("set_limit_"):
-            limit = int(callback_data.replace("set_limit_", ""))
-            user_id = query.from_user.id
-            update_user_preferences(user_id, daily_limit=limit)
-
-            # Note: Daily limit doesn't affect scheduling, just manual requests
-            # But we can still update in case we want to use it for scheduled news later
-
-            await query.answer(f"✅ Limit set to {limit} articles!")
-            await self.show_limit_menu(query)
 
         # Handle notification actions
         elif callback_data == "enable_notifications":
@@ -1222,8 +960,8 @@ Use `/sources` to see configured news sources.
             if self.scheduler_manager:
                 await self.scheduler_manager.update_user_schedule(user_id)
 
-            await query.answer("✅ Notifications enabled!")
-            await self.show_notifications_menu(query)
+            await query.answer("✅ Daily news schedule enabled!")
+            await self.show_schedule_toggle_menu(query)
 
         elif callback_data == "disable_notifications":
             user_id = query.from_user.id
@@ -1233,8 +971,8 @@ Use `/sources` to see configured news sources.
             if self.scheduler_manager:
                 await self.scheduler_manager.update_user_schedule(user_id)
 
-            await query.answer("✅ Notifications disabled!")
-            await self.show_notifications_menu(query)
+            await query.answer("✅ Daily news schedule disabled!")
+            await self.show_schedule_toggle_menu(query)
 
         # Handle timezone setting
         elif callback_data == "settings_timezone":
@@ -1289,18 +1027,119 @@ Use `/sources` to see configured news sources.
         elif callback_data == "main_menu":
             await self.show_main_menu(query)
 
+    async def show_status_menu(self, query):
+        """Show status information."""
+        try:
+            user_prefs = get_user_preferences(query.from_user.id)
+            user_timezone = user_prefs.get("timezone", "UTC")
+
+            # Get current time in user's timezone
+            try:
+                user_tz = pytz.timezone(user_timezone)
+                current_time = datetime.now(user_tz).strftime("%H:%M:%S %Z")
+            except:
+                current_time = datetime.now().strftime("%H:%M:%S UTC")
+
+            sent_count = len(get_sent_messages_list())
+
+            status_text = f"""📊 **Bot Status**
+`───────────────────────────`
+
+🕒 **Time:** {current_time}
+📨 **Messages:** {sent_count} tracked
+💾 **Database:** ✅ Active
+🤖 **Bot:** ✅ Running
+
+**Available Categories:**
+{chr(10).join([f"• {data['emoji']} {cat.title()}" for cat, data in NEWS_CATEGORIES.items()])}"""
+
+            keyboard = [
+                [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")],
+            ]
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                status_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
+            )
+
+        except Exception as e:
+            await query.edit_message_text("❌ Error getting status")
+
+    async def show_sources_menu(self, query):
+        """Show sources information."""
+        try:
+            sources_text = "📰 **News Sources**\n`───────────────────────────`\n\n"
+
+            for category, config in self.news_categories_dict.items():
+                emoji = NEWS_CATEGORIES[category]["emoji"]
+                sources_text += f"{emoji} **{category.title()}:**\n"
+
+                for source_key, source_info in config["news_sources"].items():
+                    sources_text += f"  • {source_info['source_name']}\n"
+
+                sources_text += "\n"
+
+            sources_text += "\n💡 *All sources fetched via NewsData.io API*"
+
+            keyboard = [
+                [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")],
+            ]
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                sources_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
+            )
+
+        except Exception as e:
+            logger.error(f"Error in sources menu: {e}")
+            await query.edit_message_text("❌ Error getting sources list")
+
+    async def show_settings_menu(self, query):
+        """Show main settings menu."""
+        user_prefs = get_user_preferences(query.from_user.id)
+
+        settings_text = f"""⚙️ **Your Settings**
+`───────────────────────────`
+
+📂 **Categories:** {", ".join([cat.title() for cat in user_prefs.get("subscribed_categories", [])]) or "*None*"}
+
+⏰ **Delivery Time:** {user_prefs.get("preferred_time") or "*Not set*"}
+
+📅 **Daily Schedule:** {"✅ Enabled" if user_prefs.get("notifications", True) else "❌ Disabled"}
+
+👆 **Choose what to configure:**"""
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "📂 Manage Categories", callback_data="settings_categories"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "📅 Daily Schedule", callback_data="settings_notifications"
+                )
+            ],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")],
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            settings_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
+        )
+
     async def show_categories_menu(self, query):
         """Show categories management sub-menu."""
         user_prefs = get_user_preferences(query.from_user.id)
         current_categories = user_prefs.get("subscribed_categories", [])
 
         categories_text = f"""📂 **Category Management**
+`───────────────────────────`
 
 🔘 **Currently Subscribed:**
-{", ".join([cat.title() for cat in current_categories]) or "None"}
+{", ".join([cat.title() for cat in current_categories]) or "*None*"}
 
-👆 **Choose an action:**
-        """
+👆 **Choose an action:**"""
 
         keyboard = []
         # Add individual category buttons
@@ -1353,12 +1192,12 @@ Use `/sources` to see configured news sources.
         logger.info(f"User {query.from_user.id} preferences: {user_prefs}")
 
         time_text = f"""⏰ **Time Preferences**
+`───────────────────────────`
 
-    🕐 **Current Schedule:** {current_time}
-    🌍 **Your Timezone:** {tz_display}
+🕐 **Current Schedule:** {current_time}
+🌍 **Your Timezone:** {tz_display}
 
-    👆 **Choose a preset time:**
-        """
+👆 **Choose a preset time:**"""
 
         keyboard = [
             [
@@ -1384,7 +1223,11 @@ Use `/sources` to see configured news sources.
                     "🌍 Change Timezone", callback_data="settings_timezone"
                 )
             ],
-            [InlineKeyboardButton("🔙 Back to Settings", callback_data="settings")],
+            [
+                InlineKeyboardButton(
+                    "🔙 Back to Daily Schedule", callback_data="settings_notifications"
+                )
+            ],
         ]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1392,66 +1235,44 @@ Use `/sources` to see configured news sources.
             time_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
         )
 
-    async def show_limit_menu(self, query):
-        """Show daily limit sub-menu."""
-        user_prefs = get_user_preferences(query.from_user.id)
-        current_limit = user_prefs.get("daily_limit", 5)
-
-        limit_text = f"""📊 **Daily Article Limit**
-
-📈 **Current Limit:** {current_limit} articles per category
-
-👆 **Choose a new limit:**
-        """
-
-        keyboard = [
-            [
-                InlineKeyboardButton("1️⃣ 1 article", callback_data="set_limit_1"),
-                InlineKeyboardButton("3️⃣ 3 articles", callback_data="set_limit_3"),
-            ],
-            [
-                InlineKeyboardButton("5️⃣ 5 articles", callback_data="set_limit_5"),
-                InlineKeyboardButton("🔟 10 articles", callback_data="set_limit_10"),
-            ],
-            [
-                InlineKeyboardButton("1️⃣5️⃣ 15 articles", callback_data="set_limit_15"),
-                InlineKeyboardButton("2️⃣0️⃣ 20 articles", callback_data="set_limit_20"),
-            ],
-            [InlineKeyboardButton("🔙 Back to Settings", callback_data="settings")],
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            limit_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
-        )
-
-    async def show_notifications_menu(self, query):
-        """Show notifications toggle."""
+    async def show_schedule_toggle_menu(self, query):
+        """Show daily news schedule toggle."""
         user_prefs = get_user_preferences(query.from_user.id)
         current_notifications = user_prefs.get("notifications", True)
+        preferred_time = user_prefs.get("preferred_time")
 
-        notifications_text = f"""🔔 **Notification Settings**
+        schedule_text = f"""📅 **Daily News Schedule**
+`───────────────────────────`
 
-🔊 **Current Status:** {"✅ Enabled" if current_notifications else "❌ Disabled"}
+🔄 **Status:** {"✅ Enabled" if current_notifications else "❌ Disabled"}
+⏰ **Delivery Time:** {preferred_time or "*Not set*"}
 
-👆 **Choose action:**
-        """
+💡 **What this controls:**
+• Automatic daily news at your preferred time
+• Manual requests always work regardless
+
+👆 **Choose action:**"""
 
         keyboard = [
             [
                 InlineKeyboardButton(
-                    "🔔 Enable Notifications", callback_data="enable_notifications"
+                    "✅ Enable Daily News", callback_data="enable_notifications"
                 ),
                 InlineKeyboardButton(
-                    "🔕 Disable Notifications", callback_data="disable_notifications"
+                    "❌ Disable Daily News", callback_data="disable_notifications"
                 ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "⏰ Set Delivery Time", callback_data="settings_time"
+                )
             ],
             [InlineKeyboardButton("🔙 Back to Settings", callback_data="settings")],
         ]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            notifications_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
+            schedule_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup
         )
 
     async def show_timezone_menu(self, query):
@@ -1471,12 +1292,12 @@ Use `/sources` to see configured news sources.
         # Add a timestamp to ensure message content changes
         update_time = datetime.now().strftime("%H:%M:%S")
 
-        timezone_text = f"""🌍 **Timezone Settings** ⏰ {update_time}
+        timezone_text = f"""🌍 **Timezone Settings**
+`───────────────────────────`
 
-🗺️ **Current Timezone:** {tz_display}
+🗺️ **Current:** {tz_display}
 
-👆 **Select your timezone:**
-        """
+👆 **Select your timezone:**"""
 
         # Get current time for each timezone to display
         now_utc = datetime.now(pytz.UTC)
@@ -1572,17 +1393,19 @@ Use `/sources` to see configured news sources.
         user = query.from_user
         user_prefs = get_user_preferences(user.id)
 
-        welcome_text = f"""
-    👋 **Hi {user.first_name}!**
+        welcome_text = f"""👋 **Hi {user.first_name}!**
+`───────────────────────────`
 
-    Ready for some news? Just pick what you're interested in:
-        """
+📰 **Ready for some news?**
+Just pick what you're interested in below:"""
 
-        # Create simple action-focused keyboard (same as /start)
+        # Create comprehensive menu with all available options (same as /start)
         keyboard = [
             [InlineKeyboardButton("📰 Get News", callback_data="show_news_menu")],
+            [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
             [
-                InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
+                InlineKeyboardButton("📰 News Sources", callback_data="sources"),
+                InlineKeyboardButton("📊 Status", callback_data="status"),
             ],
         ]
 
