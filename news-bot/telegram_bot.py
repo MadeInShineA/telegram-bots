@@ -1105,7 +1105,7 @@ Just pick what you're interested in below:"""
 
 ⏰ **Delivery Time:** {user_prefs.get("preferred_time") or "*Not set*"}
 
-📅 **Daily Schedule:** {"✅ Enabled" if user_prefs.get("notifications", True) else "❌ Disabled"}
+📅 **Daily Schedule:** {"✅ Enabled" if user_prefs.get("notifications", False) else "❌ Disabled"}
 
 👆 **Choose what to configure:**"""
 
@@ -1238,7 +1238,7 @@ Just pick what you're interested in below:"""
     async def show_schedule_toggle_menu(self, query):
         """Show daily news schedule toggle."""
         user_prefs = get_user_preferences(query.from_user.id)
-        current_notifications = user_prefs.get("notifications", True)
+        current_notifications = user_prefs.get("notifications", False)
         preferred_time = user_prefs.get("preferred_time")
 
         schedule_text = f"""📅 **Daily News Schedule**

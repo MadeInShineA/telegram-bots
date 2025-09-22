@@ -120,7 +120,7 @@ class NewsDatabase:
                         preferred_time TEXT,
                         language TEXT DEFAULT 'en',
                         daily_limit INTEGER DEFAULT 5,
-                        notifications BOOLEAN DEFAULT 1,
+                        notifications BOOLEAN DEFAULT 0,
                         timezone TEXT DEFAULT 'UTC',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -406,7 +406,7 @@ class NewsDatabase:
                         "daily_limit": result[3],
                         "notifications": bool(result[4])
                         if result[4] is not None
-                        else True,
+                        else False,
                         "timezone": result[5] or "UTC",
                     }
                 else:
@@ -421,7 +421,7 @@ class NewsDatabase:
                         "preferred_time": None,
                         "language": "en",
                         "daily_limit": 5,
-                        "notifications": True,
+                        "notifications": False,
                         "timezone": "UTC",
                     }
 
@@ -437,7 +437,7 @@ class NewsDatabase:
                 "preferred_time": None,
                 "language": "en",
                 "daily_limit": 5,
-                "notifications": True,
+                "notifications": False,
                 "timezone": "UTC",
             }
 

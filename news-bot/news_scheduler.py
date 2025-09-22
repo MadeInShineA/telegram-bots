@@ -161,7 +161,7 @@ class NewsScheduler:
 
             # Check if user still has notifications enabled
             user_prefs = get_user_preferences(user_id)
-            if not user_prefs.get("notifications", True):
+            if not user_prefs.get("notifications", False):
                 logger.info(f"User {user_id} has notifications disabled, skipping")
                 return
 
@@ -252,7 +252,7 @@ _Use /settings to modify your preferences or /news to get more articles._"""
             preferred_time = user_prefs.get("preferred_time")
             timezone = user_prefs.get("timezone", "UTC")
             subscribed_categories = user_prefs.get("subscribed_categories", [])
-            notifications = user_prefs.get("notifications", True)
+            notifications = user_prefs.get("notifications", False)
 
             job_id = f"daily_news_{user_id}"
 
